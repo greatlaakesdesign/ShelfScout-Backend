@@ -48,6 +48,38 @@ User Goals:
 Provide a recipe in plain text (no markdown). Include: ingredient list, prep time, cooking instructions, and nutritional breakdown.`;
     } else if (type === 'analysis') {
       prompt = `Analyze this meal and provide a quick assessment.
+    } else if (type === 'macro_recommendation') {
+      prompt = `You are an expert nutritionist and fitness coach. Generate personalized daily calorie and macro (protein, carbs, fat) recommendations based on the user's profile and goals.
+
+User Profile:
+- Age: ${nutrition.age}
+- Gender: ${nutrition.gender}
+- Weight: ${nutrition.weight_lbs} lbs
+- Height: ${nutrition.height_feet}'${nutrition.height_inches || 0}"
+- Activity Level: ${nutrition.activity_level}
+
+Goals & Preferences:
+- Health Goals: ${userGoals.goals?.join(', ') || 'General health'}
+- Diet Preference: ${userGoals.diet_preference || 'No preference'}
+- Preferred Exercises: ${userGoals.preferred_exercises || 'Not specified'}
+
+Based on this information, calculate realistic, sustainable daily targets. Consider:
+1. BMR and TDEE based on the user's physical profile
+2. Their specific goals (weight loss should have moderate deficit, muscle gain should have modest surplus)
+3. Activity level
+4. The macro ratios should support their goals (higher protein for muscle building or weight loss)
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "calories": daily_calorie_target,
+  "protein": daily_protein_grams,
+  "carbs": daily_carbs_grams,
+  "fat": daily_fat_grams
+}
+
+Make sure the macros add up correctly (protein*4 + carbs*4 + fat*9 should roughly equal calories).`;
+    } else {
+      return res.status(400).json({ error: 'Invalid type. Use: guidance, recipe, analysis, meal_estimate, food_analysis, or macro_recommendation' });
 
 Nutrition:
 - Calories: ${nutrition.calories || 0}
@@ -115,7 +147,7 @@ Respond with this exact JSON structure:
   "allergenWarnings": ["Any allergen or restriction conflicts"]
 }`;
     } else {
-      return res.status(400).json({ error: 'Invalid type. Use: guidance, recipe, analysis, meal_estimate, or food_analysis' });
+      return res.status(400).json({ error: 'Invalid type. Use: guidance, recipe, analysis, meal_estimate, food_analysis, or macro_recommendation' });
     }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
