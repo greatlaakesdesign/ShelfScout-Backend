@@ -4,6 +4,6 @@
   "description": "ShelfScout Vercel serverless backend",
   "type": "module",
   "engines": {
-    "node": "18.x"
+    "node": "24"
   }
 }
