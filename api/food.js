@@ -26,6 +26,39 @@ function generateSignature(httpMethod, baseUrl, params, consumerSecret) {
   return signature.toString('base64');
 }
 
+// Parse nutrition values from FatSecret food_description string
+// Example: "Per 100g - Calories: 165kcal | Fat: 3.6g | Carbs: 0g | Protein: 31g"
+function parseNutritionFromDescription(description) {
+  const nutrition = { calories: 0, fat: 0, carbs: 0, protein: 0, servingSize: '100', servingUnit: 'g' };
+
+  if (!description) return nutrition;
+
+  // Extract serving size (e.g., "Per 100g" or "Per 1 cup")
+  const servingMatch = description.match(/Per\s+([\d.]+)\s*(\w+)/i);
+  if (servingMatch) {
+    nutrition.servingSize = servingMatch[1];
+    nutrition.servingUnit = servingMatch[2];
+  }
+
+  // Extract calories
+  const calMatch = description.match(/Calories:\s*([\d.]+)/i);
+  if (calMatch) nutrition.calories = parseFloat(calMatch[1]);
+
+  // Extract fat
+  const fatMatch = description.match(/Fat:\s*([\d.]+)/i);
+  if (fatMatch) nutrition.fat = parseFloat(fatMatch[1]);
+
+  // Extract carbs (could be "Carbs" or "Carbohydrates")
+  const carbMatch = description.match(/Carb(?:ohydrate)?s?:\s*([\d.]+)/i);
+  if (carbMatch) nutrition.carbs = parseFloat(carbMatch[1]);
+
+  // Extract protein
+  const proteinMatch = description.match(/Protein:\s*([\d.]+)/i);
+  if (proteinMatch) nutrition.protein = parseFloat(proteinMatch[1]);
+
+  return nutrition;
+}
+
 async function searchFatSecret(query, consumerKey, consumerSecret) {
   const apiUrl = 'https://platform.fatsecret.com/rest/server.api';
   const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -66,8 +99,21 @@ async function searchFatSecret(query, consumerKey, consumerSecret) {
       return { foods: [], error: null };
     }
 
-    const foods = Array.isArray(data.foods.food) ? data.foods.food : [data.foods.food];
-    return { foods: foods.slice(0, 20), error: null };
+    const rawFoods = Array.isArray(data.foods.food) ? data.foods.food : [data.foods.food];
+
+    // Parse nutrition from food_description for each food
+    const foods = rawFoods.slice(0, 20).map(food => {
+      const nutrition = parseNutritionFromDescription(food.food_description);
+      return {
+        food_id: food.food_id,
+        food_name: food.food_name,
+        brand_name: food.brand_name,
+        food_description: food.food_description,
+        ...nutrition,
+      };
+    });
+
+    return { foods, error: null };
   } catch (error) {
     return { foods: [], error: error.message };
   }
@@ -104,6 +150,24 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Food not found' });
     }
 
+    // Return all foods for search queries, single food for barcode lookups
+    if (search && !barcode) {
+      // Return array of foods for search
+      const results = foods.map(food => ({
+        food_id: food.food_id,
+        food_name: food.food_name || 'Unknown',
+        brand_name: food.brand_name,
+        calories: Math.round(food.calories || 0),
+        protein: Math.round((food.protein || 0) * 10) / 10,
+        carbohydrate: Math.round((food.carbs || 0) * 10) / 10,
+        fat: Math.round((food.fat || 0) * 10) / 10,
+        serving_size: food.servingSize || '100',
+        serving_unit: food.servingUnit || 'g',
+      }));
+      return res.status(200).json({ foods: results });
+    }
+
+    // Single food for barcode lookup (backward compatibility)
     const food = foods[0];
     return res.status(200).json({
       barcode: barcode || search,
@@ -111,9 +175,9 @@ export default async function handler(req, res) {
       brand: food.brand_name || 'FatSecret',
       calories: Math.round(food.calories || 0),
       protein: Math.round((food.protein || 0) * 10) / 10,
-      carbohydrates: Math.round((food.carbohydrate || 0) * 10) / 10,
+      carbohydrates: Math.round((food.carbs || 0) * 10) / 10,
       fat: Math.round((food.fat || 0) * 10) / 10,
-      servingSize: food.serving_size ? `${food.serving_size} ${food.serving_unit || 'g'}` : '100g',
+      servingSize: `${food.servingSize || '100'} ${food.servingUnit || 'g'}`,
       source: 'fatsecret',
     });
   } catch (error) {
