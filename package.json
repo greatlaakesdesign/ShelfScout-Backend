@@ -1,1 +1,9 @@
-
+{
+  "name": "shelfscout-backend",
+  "version": "1.0.0",
+  "description": "ShelfScout Vercel serverless backend",
+  "type": "module",
+  "engines": {
+    "node": "18.x"
+  }
+}
