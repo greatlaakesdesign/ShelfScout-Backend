@@ -19,7 +19,23 @@ export default async function handler(req, res) {
     let prompt = '';
 
     if (type === 'guidance') {
-      prompt = `You are a certified nutrition expert. Based on this meal and the user's goals, provide brief, actionable nutrition guidance.
+      // Check if this is a coach question (has question field) vs food guidance
+      if (nutrition.question) {
+        prompt = `You are a certified nutrition coach and wellness expert. Answer the user's question with practical, personalized advice.
+
+User's Question: "${nutrition.question}"
+
+User Profile:
+${nutrition.userContext || 'No profile information available'}
+
+User Goals:
+- Age: ${userGoals.age || 'Unknown'}
+- Primary Goal: ${userGoals.goal || 'General health'}
+- Activity Level: ${userGoals.activityLevel || 'Unknown'}
+
+Provide helpful, practical guidance. Be supportive but realistic. Keep your response conversational and under 150 words. Do not use markdown formatting.`;
+      } else {
+        prompt = `You are a certified nutrition expert. Based on this meal and the user's goals, provide brief, actionable nutrition guidance.
 
 Food: ${nutrition.name || 'Unknown food'}
 Nutrition per serving:
@@ -36,6 +52,7 @@ User Profile:
 - Protein Target: ${userGoals.dailyProtein || 'Unknown'}g
 
 Provide 2-3 sentences of plain text guidance (no markdown, no bullet points). Be supportive and practical.`;
+      }
     } else if (type === 'recipe') {
       prompt = `You are a creative chef. Generate a simple, healthy recipe using common ingredients.
 
@@ -47,39 +64,35 @@ User Goals:
 
 Provide a recipe in plain text (no markdown). Include: ingredient list, prep time, cooking instructions, and nutritional breakdown.`;
     } else if (type === 'analysis') {
-      prompt = `Analyze this meal and provide a quick assessment.
-    } else if (type === 'macro_recommendation') {
-      prompt = `You are an expert nutritionist and fitness coach. Generate personalized daily calorie and macro (protein, carbs, fat) recommendations based on the user's profile and goals.
+      // Check if this is coach insights (has recentMeals) vs simple meal analysis
+      if (nutrition.recentMeals) {
+        prompt = `You are a nutrition coach analyzing a user's eating habits. Based on their recent meals and habits, provide 2-3 helpful insights.
+
+Recent Meals (last 7 days):
+${nutrition.recentMeals || 'No meal data'}
+
+Frequent Foods: ${nutrition.frequentFoods || 'Unknown'}
+Recent Trends: ${nutrition.recentTrends || 'Unknown'}
+Average Daily Calories: ${nutrition.averageDailyCalories || 'Unknown'}
 
 User Profile:
-- Age: ${nutrition.age}
-- Gender: ${nutrition.gender}
-- Weight: ${nutrition.weight_lbs} lbs
-- Height: ${nutrition.height_feet}'${nutrition.height_inches || 0}"
-- Activity Level: ${nutrition.activity_level}
+- Age: ${userGoals.age || 'Unknown'}
+- Goal: ${userGoals.goal || 'General health'}
+- Activity Level: ${userGoals.activityLevel || 'Unknown'}
+- Diet Preference: ${userGoals.dietaryPreference || 'No preference'}
 
-Goals & Preferences:
-- Health Goals: ${userGoals.goals?.join(', ') || 'General health'}
-- Diet Preference: ${userGoals.diet_preference || 'No preference'}
-- Preferred Exercises: ${userGoals.preferred_exercises || 'Not specified'}
+Return ONLY a valid JSON array (no markdown, no code blocks) with 2-3 insights:
+[
+  {
+    "type": "observation" or "suggestion" or "warning" or "encouragement",
+    "message": "Your insight here",
+    "actionable": "Optional specific action they can take"
+  }
+]
 
-Based on this information, calculate realistic, sustainable daily targets. Consider:
-1. BMR and TDEE based on the user's physical profile
-2. Their specific goals (weight loss should have moderate deficit, muscle gain should have modest surplus)
-3. Activity level
-4. The macro ratios should support their goals (higher protein for muscle building or weight loss)
-
-Return ONLY valid JSON (no markdown, no code blocks):
-{
-  "calories": daily_calorie_target,
-  "protein": daily_protein_grams,
-  "carbs": daily_carbs_grams,
-  "fat": daily_fat_grams
-}
-
-Make sure the macros add up correctly (protein*4 + carbs*4 + fat*9 should roughly equal calories).`;
-    } else {
-      return res.status(400).json({ error: 'Invalid type. Use: guidance, recipe, analysis, meal_estimate, food_analysis, or macro_recommendation' });
+Be practical and supportive. Focus on patterns you notice and actionable improvements.`;
+      } else {
+        prompt = `Analyze this meal and provide a quick assessment.
 
 Nutrition:
 - Calories: ${nutrition.calories || 0}
@@ -90,6 +103,7 @@ Nutrition:
 User's daily goal: ${userGoals.dailyCalories || 'Unknown'} calories, ${userGoals.dailyProtein || 'Unknown'}g protein
 
 Provide 2-3 sentences of plain text analysis. Be encouraging and practical (no markdown).`;
+      }
     } else if (type === 'meal_estimate') {
       prompt = `You are a nutrition expert with access to a comprehensive food database. The user ate this meal:
 
@@ -146,6 +160,36 @@ Respond with this exact JSON structure:
   "exerciseOffset": "If this is a treat, estimate exercise to offset (e.g., '30 min walk'). Only include if relevant.",
   "allergenWarnings": ["Any allergen or restriction conflicts"]
 }`;
+    } else if (type === 'macro_recommendation') {
+      prompt = `You are an expert nutritionist and fitness coach. Generate personalized daily calorie and macro (protein, carbs, fat) recommendations based on the user's profile and goals.
+
+User Profile:
+- Age: ${nutrition.age}
+- Gender: ${nutrition.gender}
+- Weight: ${nutrition.weight_lbs} lbs
+- Height: ${nutrition.height_feet}'${nutrition.height_inches || 0}"
+- Activity Level: ${nutrition.activity_level}
+
+Goals & Preferences:
+- Health Goals: ${userGoals.goals?.join(', ') || 'General health'}
+- Diet Preference: ${userGoals.diet_preference || 'No preference'}
+- Preferred Exercises: ${userGoals.preferred_exercises || 'Not specified'}
+
+Based on this information, calculate realistic, sustainable daily targets. Consider:
+1. BMR and TDEE based on the user's physical profile
+2. Their specific goals (weight loss should have moderate deficit, muscle gain should have modest surplus)
+3. Activity level
+4. The macro ratios should support their goals (higher protein for muscle building or weight loss)
+
+Return ONLY valid JSON (no markdown, no code blocks):
+{
+  "calories": daily_calorie_target,
+  "protein": daily_protein_grams,
+  "carbs": daily_carbs_grams,
+  "fat": daily_fat_grams
+}
+
+Make sure the macros add up correctly (protein*4 + carbs*4 + fat*9 should roughly equal calories).`;
     } else {
       return res.status(400).json({ error: 'Invalid type. Use: guidance, recipe, analysis, meal_estimate, food_analysis, or macro_recommendation' });
     }
